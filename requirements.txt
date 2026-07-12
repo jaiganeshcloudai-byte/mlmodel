@@ -1,0 +1,22 @@
+# ==============================================================================
+# FINAL ASSIGNMENT DELIVERABLE: PIP EXTENSION REQUIREMENTS FILE
+# ==============================================================================
+# File Path Location: requirements.txt
+
+# Core Engine Build Frameworks
+unsloth
+torchao
+
+# Performance & Hardware Acceleration Layer Matrix
+torch>=2.1.0
+accelerate
+bitsandbytes
+peft
+
+# Hugging Face Training Ecosystem
+transformers==4.56.2
+trl==0.22.2
+datasets
+
+# Domain Parsing Infrastructure Utilities
+pymupdf
