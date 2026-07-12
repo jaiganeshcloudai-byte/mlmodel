@@ -1,42 +1,29 @@
 # ==============================================================================
-# FINAL ASSIGNMENT DELIVERABLE: PRODUCTION INFERENCE ENGINE
+# FINAL ASSIGNMENT DELIVERABLE: PRODUCTION INFERENCE ENGINE (FIXED)
 # ==============================================================================
-# File Path Location: src/inference.py
-# Objective: Load the final preference-aligned DPO model and provide a clean 
-#            entry point to handle incoming customer support inquiries.
-
 import os
 import torch
 from unsloth import FastLanguageModel
 
 def generate_answer(question_text: str) -> str:
-    """
-    Loads the final DPO-aligned model, wraps the user's question into the exact 
-    prompt template used during training, and performs accelerated inference decoding.
-    """
     max_seq_length = 2048
-    
-    # Point to the drive path containing your final DPO weights configuration
     model_path = "/content/drive/MyDrive/domain-ai-assistant-finetuning/models/final_dpo_model"
     
     if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"Could not find the final DPO model at '{model_path}'. "
-            "Please verify that Stage 3 has completed and saved successfully."
-        )
+        raise FileNotFoundError(f"Missing model path alignment layer: {model_path}")
 
-    # 1. Load the production-aligned weights natively inside Unsloth
+    # 1. Load the model and force it to recognize the adapter layers
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = model_path,
         max_seq_length = max_seq_length,
-        dtype = None,            # Auto-detects based on system GPU architecture
-        load_in_4bit = True,     # Keeps memory footprint safe on a single T4 GPU
+        dtype = None,
+        load_in_4bit = True,
     )
     
     # 2. Shift active network parameters into fast inference decoding mode
     FastLanguageModel.for_inference(model)
     
-    # 3. Construct the exact prompt structure used during instruction tuning and alignment
+    # 3. Construct the prompt template matching Stage 2 and Stage 3 exactly
     prompt = f"""You are an expert customer support assistant. Provide clear, accurate, and structured answers.
 
 ### Question:
@@ -45,37 +32,28 @@ def generate_answer(question_text: str) -> str:
 ### Response:
 """
     
-    # 4. Tokenize inputs and map them directly to the active GPU space
+    # 4. Tokenize and map to GPU
     inputs = tokenizer([prompt], return_tensors="pt").to("cuda")
     
-    # 5. Generate completion tokens with optimized decoding parameters
+    # 5. Optimized generation parameters to stop the looping behavior entirely
     outputs = model.generate(
         **inputs, 
-        max_new_tokens=256, 
+        max_new_tokens=200, 
         use_cache=True,
-        temperature=0.3,  # Lower temperature guarantees highly focused, deterministic text
-        top_p=0.9
+        temperature=0.5,           # Balanced creativity and structure
+        top_p=0.9,
+        repetition_penalty=1.2     # CRITICAL: Penalizes the model from repeating words/phrases
     )
     
-    # 6. Decode tokens and isolate the newly generated assistant response payload
     decoded_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)[0]
-    
-    # Clean up formatting artifact boundaries to isolate the response text cleanly
-    response_segment = decoded_output.split("### Response:\n")[-1]
-    return response_segment.strip()
+    return decoded_output.split("### Response:\n")[-1].strip()
 
 if __name__ == "__main__":
-    # Sample domain-specific tracking and refund query
     sample_question = "What is the policy for processing a refund if my package was delayed for weeks and missed my event?"
-    
-    print("Executing AI Customer Support Generation Engine...")
-    print("=" * 60)
-    
+    print("Executing AI Customer Support Generation Engine...\n" + "="*60)
     try:
         final_answer = generate_answer(sample_question)
-        print(f"User Question:\n-> {sample_question}\n")
-        print(f"Final Assistant Answer:\n-> {final_answer}")
+        print(f"User Question:\n-> {sample_question}\n\nFinal Assistant Answer:\n-> {final_answer}")
     except Exception as e:
         print(f"🚨 Inference Generation Error: {str(e)}")
-
-    print("=" * 60)
+    print("="*60)
